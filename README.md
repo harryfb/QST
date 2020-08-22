@@ -37,6 +37,12 @@ Install the detectron2 library from the FAIR git repository:
 python -m pip install 'git+https://github.com/facebookresearch/detectron2.git'
 ```
 
+Download the pytorch model file (too large to be hosted on gitHub):
+
+```bash
+wget -O ./resources/model_final.pth 'https://www.dropbox.com/s/ifghoc72yikpctj/model_final.pth?raw=1'
+```
+
 Sign up for a Google Cloud account if you do not already have one and follow their 
 [guide](https://cloud.google.com/docs/authentication/getting-started) to generate a **JSON** credentials file.
 

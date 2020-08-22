@@ -8,11 +8,13 @@ from Levenshtein import distance
 from shapely.geometry.polygon import Polygon
 from shapely.errors import TopologicalError
 from copy import deepcopy
+
 from detectron2.config import get_cfg
+from detectron2.utils.logger import setup_logger
 
 from detectors.objectDetect import ObjectDetector
 from detectors.textDetect import TextDetector
-from detectron2.utils.logger import setup_logger
+
 
 CONFIG_FILE = "resources/mask_rcnn_X_101_32x8d_FPN_3x.yaml"
 WEIGHTS = "resources/model_final.pth"
@@ -35,7 +37,7 @@ CLASSES = ["cereal",
 class ObjectInference:
     def __init__(self):
         """
-        Constructor for ExpiryDetector class
+        Constructor for ObjectDetector class
         """
         num_classes = len(CLASSES)
         self.logger = setup_logger(name="recognition")
@@ -55,16 +57,17 @@ class ObjectInference:
     @staticmethod
     def _setup_config(num_classes, config_file, weights, confidence_thres, device):
         """
+        Modifies an existing configuration with project specific params
 
         Args:
-            num_classes:
-            config_file:
-            weights:
-            confidence_thres:
-            device:
+            num_classes (int): The number of classes in the dataset
+            config_file (cfg): An existing config file to merge
+            weights (str): Weights for a pre-trained model (transfer learning)
+            confidence_thres (float): The confidence threshold in order for a detection to be returned
+            device (str): The device type used for inference (CPU/GPU)
 
         Returns:
-
+            cfg: Detectron2 configuration file
         """
         # load config from file and constants
         cfg = get_cfg()
@@ -82,19 +85,16 @@ class ObjectInference:
 
     def run_inference(self, image_bytes):
         """
+        Top level inference returning object detection predictions
 
         Args:
-            image_bytes:
+            image_bytes (bytes): An input image
 
         Returns:
-
+            dict: A dictionary containing a detection results
         """
         np_arr = np.frombuffer(image_bytes, np.uint8)
         image_np = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-
-        # # Convert to bgr np array
-        # image_rgb = np.array(Image.open(image_file).convert('RGB'))
-        # image_np = image_rgb[..., ::-1].copy()
 
         self.logger.info("Running detectron2 recognition...")
         t_start = time.perf_counter()
@@ -138,28 +138,35 @@ class ObjectInference:
 
             detected_words = self._locate_words(detected_object['mask'], detected_texts)
 
+            # Cleanup words
             cleaned_words = []
             for detected_word in detected_words:
+
+                # Add alphabetical value to output
                 if detected_word.isalpha():
                     cleaned_words.append(detected_word)
 
+                # Remove numerical values
                 elif detected_word.isnumeric():
                     continue
 
+                # Split hyphenated strings
                 elif '-' in detected_word:
                     split_word = detected_word.split('-')
 
                     for word in split_word:
                         if word != '':
                             cleaned_words.append(word)
+
+                # Remove any punctuation
                 else:
                     word = ""
-
                     for char in detected_word:
                         if char not in string.punctuation:
                             word += char
                     cleaned_words.append(word)
 
+            # Prepare output
             pack['matched_words'] = self._match_in_dict(cleaned_words, self.keywords)
 
             textual_pred = self._textual_prediction(pack['matched_words'])
@@ -177,7 +184,7 @@ class ObjectInference:
         Returns the detection with the largest area
 
         Args:
-            data list(dict): List of detections (result from recognition)
+            data (list): List of detections (result from recognition)
 
         Returns:
             dict: Detection with the highest area
@@ -187,11 +194,13 @@ class ObjectInference:
             largest_item = None
 
             for item in data:
+                # Convert bbox format into full coords
                 x1 = item['bbox'][0]
                 y1 = item['bbox'][1]
                 x2 = item['bbox'][2]
                 y2 = item['bbox'][3]
 
+                # Find area and store if largest
                 area = Polygon([[x1, y1], [x1, y2], [x2, y2], [x2, y1]]).area
 
                 if area > largest_area:
@@ -228,27 +237,34 @@ class ObjectInference:
     @staticmethod
     def _reduce_multi_pred(predictions):
         """
+        Reduces predictions with high overlapping area i.e. predictions for
+        the same object, by removing all but the one with the highest confidence
+        value.
 
         Args:
-            predictions:
+            predictions (list): A list of prediction dictionaries.
 
         Returns:
-
+            list: A reduced list of prediction dictionaries.
         """
         reduce = predictions.copy()
 
+        # Iterate through all combinations of masks, comparing each only once
         for ((index_a, a), (index_b, b)) in itertools.combinations(enumerate(predictions), 2):
             a_polygon = Polygon(a['mask'])
             b_polygon = Polygon(b['mask'])
 
+            # Calculate the intersection between the masks
             try:
                 intersection = a_polygon.intersection(b_polygon).area
             except TopologicalError:
                 continue
 
+            # How much overlap exists between them
             smallest = min(a_polygon.area, b_polygon.area)
             overlap = intersection / smallest
 
+            # If high overlap, remove the lower from the result
             if overlap > 0.8:
                 if a['object_score'] > b['object_score']:
                     reduce[index_b] = None
@@ -286,13 +302,17 @@ class ObjectInference:
     @staticmethod
     def _textual_prediction(matched_text):
         """
-
+        Textual predictor, making predictions based on the number of keyword
+        dictionary matches for each class
 
         Args:
-            matched_text:
+            matched_text (dict): A dictionary containing all matched words for
+                                 each category i.e. {category1: [match1, match2]}
 
         Returns:
-
+            dict: A prediction summary containing confidence, class, word matches,
+                  distance from second most matched category and the total matched words.
+                  {score: (float), class: (str), matches: (list), distance: (int), total: (int)}
         """
         highest_score = {
             "score": 0,
@@ -301,12 +321,13 @@ class ObjectInference:
             "distance": 0
         }
 
-        # If no matched words then return dict
+        # If no matched words then return blank prediction
         if not matched_text:
             return highest_score
 
         # Count matches for each category
         num_matches = {key: len(values) for key, values in matched_text.items()}
+
         # Count total number of matches across all categories
         total_matches = sum(num_matches.values())
 
@@ -335,12 +356,14 @@ class ObjectInference:
     @staticmethod
     def final_predictions(data):
         """
+        Makes a final class prediction from the object and textual predictions
 
         Args:
-            data:
+            data (list): A list of dictionaries containing predictions
 
         Returns:
-
+            list: A list of dictionaries containing predictions with appended final
+                  predicted class and score
         """
         prediction_data = deepcopy(data)
 
@@ -353,6 +376,9 @@ class ObjectInference:
             text_class = prediction['text_class']
 
             if object_score > 0:
+
+                # If textual prediction distance is greater than two,
+                # use textual prediction
                 if text_dist > 2:
                     prediction['predicted_class'] = text_class
                     prediction['predicted_score'] = text_score

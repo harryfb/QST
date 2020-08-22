@@ -7,38 +7,41 @@ from glob import glob
 from detectors.textDetect import TextDetector
 from detectors.expiryDetect import ExpiryDetector
 
+years = 256
+months = 31
+expiry_days = {
+    'milk': 1 * months,
+    'egg': 1.5 * months,
+    'cereal': 2 * years,
+    'condiment': 4 * years,
+    'bread': 2 * years,
+    'butter': 6 * months,
+    'tinned tomatoes': 5 * years,
+    'soup': 5 * years,
+    'baked beans': 5 * years,
+    'pasta': 3 * years
+}
+
 
 class ExpiryInference:
-    years = 256
-    months = 31
-    expiry_days = {
-        'milk': 1 * months,
-        'egg': 1.5 * months,
-        'cereal': 2 * years,
-        'condiment': 4 * years,
-        'bread': 2 * years,
-        'butter': 6 * months,
-        'tinned tomatoes': 5 * years,
-        'soup': 5 * years,
-        'baked beans': 5 * years,
-        'pasta': 3 * years
-    }
-
     def __init__(self):
         """
-
+        Constructor for ExpiryDetector class
         """
         self.expiryDetector = ExpiryDetector(30, 30)
         self.textDetector = TextDetector()
 
-    def run_inference(self, pred_class, image_bytes):
+    def run_inference(self, image_bytes, predicted_class=None):
         """
+        Top level inference returning expiry detection prediction
 
         Args:
-            image_bytes:
+            image_bytes (bytes): An input image
+            predicted_class (string): Optional class to narrow down predictions
+                                      valid predictions
 
         Returns:
-
+            datetime: An expiration date prediction
         """
         # exif_capture = self.expiryDetector.get_capture_date(path)
         exif_capture = None
@@ -72,19 +75,20 @@ class ExpiryInference:
         else:
             threshold = self.expiryDetector.current_date
 
-        return self.make_prediction(dates, threshold, pred_class)
+        return self.make_prediction(dates, threshold, predicted_class)
 
     @staticmethod
     def reduce_candidates(month_first_proposals, year_first_proposals):
         """
+        Reduces the two lists of proposals found by searching for month
+        strings and valid years, to a single list of proposals
 
         Args:
-            month_first_proposals ():
-            year_first_proposals ():
-            pred_class (str):
+            month_first_proposals (list): Proposals from a month-first search
+            year_first_proposals (list): Proposals from a year-first search
 
         Returns:
-            list: A
+            list: A list of proposals as datetime objects
         """
         # If both month and year first proposals, return any exact matches from
         # month first list, else choose year first list
@@ -103,20 +107,25 @@ class ExpiryInference:
 
         return ret
 
-    def make_prediction(self, dates, date_threshold, predicted_class):
+    @staticmethod
+    def make_prediction(dates, date_threshold, predicted_class=None):
         """
+        Makes a final prediction from a list of proposed expiration
+        dates.
 
         Args:
-            dates:
-            date_threshold:
-            predicted_class:
+            dates (list): A list of proposed date values as datetime objects
+            date_threshold (datetime): Date that a result is valid from e.g.
+                                       current date, image capture date
+            predicted_class (str): Optional class to narrow down predictions
+                                   valid predictions
 
         Returns:
-
+            datetime: A single expiration date prediction
         """
         if dates and len(dates) > 1:
             if predicted_class:
-                class_threshold = self.expiry_days[predicted_class]
+                class_threshold = expiry_days[predicted_class]
 
                 dates = [date for date in dates if (date - date_threshold).days <= class_threshold]
             else:
