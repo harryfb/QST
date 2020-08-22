@@ -33,7 +33,7 @@ pip install -r requirements.txt
 
 Install the detectron2 library from the FAIR git repository:
 
-```python
+```bash
 python -m pip install 'git+https://github.com/facebookresearch/detectron2.git'
 ```
 

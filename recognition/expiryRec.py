@@ -31,7 +31,7 @@ class ExpiryInference:
         self.expiryDetector = ExpiryDetector(30, 30)
         self.textDetector = TextDetector()
 
-    def run_inference(self, image_bytes, predicted_class=None):
+    def run_inference(self, path, image_bytes, predicted_class=None):
         """
         Top level inference returning expiry detection prediction
 
@@ -43,13 +43,7 @@ class ExpiryInference:
         Returns:
             datetime: An expiration date prediction
         """
-        # exif_capture = self.expiryDetector.get_capture_date(path)
-        exif_capture = None
-
-        # pil_img = Image.frombytes('RGBA', (128, 128), image_bytes, 'raw')
-
-        # exif_data = pil_img._getexif()
-        # print(exif_data)
+        exif_capture = self.expiryDetector.get_capture_date(path)
 
         # Run textual recognition and split any pre-process strings in list
         texts = self.textDetector.get_text(image_bytes)

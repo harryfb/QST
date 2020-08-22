@@ -1,5 +1,9 @@
 from flask import Flask, request
 import json
+import os
+import io
+import random
+from datetime import datetime as dt
 
 from recognition.objectRec import ObjectInference
 from recognition.expiryRec import ExpiryInference
@@ -22,9 +26,20 @@ def object_detection():
     assert request.method == 'POST'
 
     objectInference = ObjectInference()
-    image_bytes = request.files['image'].read()
+
+    file = request.files['image']
+    timestamp = dt.now().strftime("%d%m%Y%H%M%S")
+    rand = str(random.randint(1, 10000))
+
+    path = os.path.join('./temp', timestamp + rand)
+    file.save(path)
+
+    image_file = io.open(path, 'rb')
+    image_bytes = image_file.read()
 
     predictions = objectInference.run_inference(image_bytes)
+    os.remove(path)
+
     predictions = objectInference.final_predictions(predictions)
 
     return json.dumps(objectInference.final_predictions(predictions))
@@ -43,13 +58,21 @@ def expiry_detection():
     assert request.method == 'POST'
     prediction = {}
 
-    image_bytes = request.files['image'].read()
+    file = request.files['image']
+    timestamp = dt.now().strftime("%d%m%Y%H%M%S")
+    rand = str(random.randint(1, 10000))
+
+    path = os.path.join('./temp', timestamp + rand)
+    file.save(path)
+
+    image_file = io.open(path, 'rb')
+    image_bytes = image_file.read()
 
     expiryInference = ExpiryInference()
+    datetime = expiryInference.run_inference(path, image_bytes, None)
+    os.remove(path)
 
-    datetime = expiryInference.run_inference(None, image_bytes)
     datetime = str(datetime)
-
     if datetime:
         prediction['expiryDate'] = datetime
     else:
@@ -74,7 +97,15 @@ def detection():
     inference = ObjectInference()
     expiryInference = ExpiryInference()
 
-    image_bytes = request.files['image'].read()
+    file = request.files['image']
+    timestamp = dt.now().strftime("%d%m%Y%H%M%S")
+    rand = str(random.randint(1, 10000))
+
+    path = os.path.join('./temp', timestamp + rand)
+    file.save(path)
+
+    image_file = io.open(path, 'rb')
+    image_bytes = image_file.read()
 
     predictions = inference.run_inference(image_bytes)
     predictions = inference.final_predictions(predictions)
@@ -86,9 +117,10 @@ def detection():
     else:
         predicted_class = None
 
-    datetime = expiryInference.run_inference(predicted_class, image_bytes)
-    datetime = str(datetime)
+    datetime = expiryInference.run_inference(path, image_bytes, predicted_class)
+    os.remove(path)
 
+    datetime = str(datetime)
     if datetime:
         prediction['expiry_date'] = datetime
     else:
