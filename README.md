@@ -89,7 +89,7 @@ textual analysis.
 This example shows the JSON object returned from the image below after requesting the */detection* endpoint.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/harryfb/QST/master/images/readme_example.jpg"
+  <img src="https://github.com/harryfb/QST/blob/master/images/readme_example.jpg?raw=true"
   alt="Example of full object & expiry recognition"/>
 </p>
 
