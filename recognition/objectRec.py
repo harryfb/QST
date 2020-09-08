@@ -103,15 +103,15 @@ class ObjectInference:
         obj_t = t_finish - t_start
         self.logger.info(f"Inference time: {obj_t:0.4f} seconds")
 
+        # Reduce detections of the same object to highest scoring prediction
+        reduced = self._reduce_multi_pred(objects)
+
         self.logger.info("Calling google vision API...")
         t_start = time.perf_counter()
         texts = self.text_detector.get_text(image_bytes)
 
         # Locate detected text inside each detected object
         self.logger.info("Analysing textual content")
-
-        # Reduce detections of the same object to highest scoring prediction
-        reduced = self._reduce_multi_pred(objects)
         data = self._analyse_text(reduced, texts)
         t_finish = time.perf_counter()
         text_t = t_finish - t_start

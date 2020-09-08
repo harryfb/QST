@@ -209,7 +209,6 @@ class ExpiryDetector:
             except TypeError:
                 continue
 
-            # TODO: Try without this as repeated later on
             if current_year - 20 <= year <= current_year + 20:
                 day = month = None
                 proposed_month = ''

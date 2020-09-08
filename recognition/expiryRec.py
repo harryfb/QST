@@ -58,7 +58,7 @@ class ExpiryInference:
         else:
             month_first_proposals = None
 
-        # No successful matches so look for deliminated strings within list
+        # Get date proposals using a year first search
         year_first_proposals = self.expiryDetector.year_first_search(texts)
 
         dates = self.reduce_candidates(month_first_proposals, year_first_proposals)
@@ -91,7 +91,7 @@ class ExpiryInference:
             if ret:
                 return ret
             else:
-                return year_first_proposals
+                return year_first_proposals + month_first_proposals
         elif month_first_proposals:
             ret = [item[0] for item in month_first_proposals]
         elif year_first_proposals:

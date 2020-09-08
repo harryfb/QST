@@ -7,7 +7,30 @@ Original file is located at
     https://colab.research.google.com/drive/1SQIKuD-BnwWviQwmDxw_gZCy0NVtcyFG
 """
 
+# This code is based from the examples given in the detectron2 documentation.
+#
+# Authors:  Yuxin Wu, Alexander Kirillov, Francisco Massa,
+#           Wan-Yen Lo and Ross Girshick
+# Company:  Facebook AI Research
+# Year:     2019
+# Title:    plain_train.py
+# Type:     Source Code
+# URL:      https://github.com/facebookresearch/detectron2/blob/master/tools/plain_train_net.py
+#
+#
+# Authors:  Yuxin Wu, Alexander Kirillov, Francisco Massa,
+#           Wan-Yen Lo and Ross Girshick
+# Company:  Facebook AI Research
+# Year:     2019
+# Title:    Detectron2 Tutorial.ipynb
+# Type:     Source Code
+# URL:      https://colab.research.google.com/drive/16jcaJoc6bCFAQ96jDe2HwtXj7BMD_-m5
+
+"""Show information about the assigned GPU resource:"""
+
 !nvidia-smi
+
+"""Setup and instal dependencies:"""
 
 from google.colab import drive
 
@@ -16,6 +39,7 @@ drive.mount('/content/drive')
 !pip install -U torch==1.5 torchvision==0.6 -f https://download.pytorch.org/whl/cu101/torch_stable.html 
 !pip install pyyaml==5.1 pycocotools>=2.0.1
 import torch, torchvision
+
 print(torch.__version__, torch.cuda.is_available())
 !gcc --version
 
@@ -25,16 +49,6 @@ print(torch.__version__, torch.cuda.is_available())
 
 import wandb
 import os
-os.environ['WANDB_API_KEY'] = '2000a87a07a37c799c731975686e15079a8c188d'
-
-# Commented out IPython magic to ensure Python compatibility.
-# %cd /usr/local/lib/python3.6/dist-packages/detectron2/evaluation/
-# %rm coco_evaluation.py
-
-!wget 'https://raw.githubusercontent.com/harryfb/quick_stock-taking_api/master/coco_evaluation.py'
-
-# Commented out IPython magic to ensure Python compatibility.
-# %cd /content/drive/My\ Drive/Project/
 
 import detectron2
 
@@ -57,6 +71,15 @@ from detectron2.data import DatasetCatalog
 from detectron2.structures import BoxMode
 from detectron2.config import get_cfg
 
+"""Connect to Google Drive (dataset stored on G drive due to size):"""
+
+# Commented out IPython magic to ensure Python compatibility.
+# %cd /content/drive/My\ Drive/Project/
+
+"""Define program setup and training parameters:"""
+
+os.environ['WANDB_API_KEY'] = 'your_weights_and_biases_API_key'
+
 # TOGGLE PROGRAM FUNCTIONALITY
 TEST_INPUT = False  # Toggles image read test
 TRAINING_CURVES = False  # Toggles Tensorboard training curves
@@ -74,15 +97,13 @@ ims_per_batch = 4
 seed = 27
 
 lr = 0.0025
-
-warmup_iters = 1000
-max_iter = 1500
-step_low = 1000
-step_high = 1500
+warmup_iters = 500
+max_iter = 25000
+step_low = 15000
+step_high = 25000
 gamma = 0.2
-momentum = 0.99
-
-eval_period = 250
+momentum = 0.90
+eval_period = 2500
 
 # FILE PATHS
 TRAIN_DATASET_NAME = ROOT_DIR + "_train"
@@ -95,6 +116,8 @@ TEST_DIR = ROOT_DIR + "/val"
 
 output = ROOT_DIR + '/output'
 
+"""Register the dataset and add it the dataset catalog:"""
+
 try:
   register_coco_instances(TRAIN_DATASET_NAME, {}, TRAIN_ANNOTATIONS, TRAIN_DIR)
   register_coco_instances(TEST_DATASET_NAME, {}, TEST_ANNOTATIONS, TEST_DIR)
@@ -103,6 +126,10 @@ except (AssertionError):
 
 train_metadata = MetadataCatalog.get(TRAIN_DATASET_NAME)
 dataset_dicts = DatasetCatalog.get(TRAIN_DATASET_NAME)
+
+"""Get a dictionary containing the number of object instances per class
+in the dataset. This will be logged to Weights and Biases later.
+"""
 
 hist_bins = np.arange(num_classes + 1)
 histogram = np.zeros((num_classes,), dtype=np.int)
@@ -113,12 +140,16 @@ for entry in dataset_dicts:
 
 class_instances = {('class_instances.' + train_metadata.thing_classes[i]): int(count) for i, count in enumerate(histogram)}
 
+"""Show a sample of image inputs for debug purposes:"""
+
 if TEST_INPUT:
   for d in random.sample(dataset_dicts, 3):
       img = cv2.imread(d["file_name"])
       visualizer = Visualizer(img[:, :, ::-1], metadata=train_metadata, scale=0.5)
       out = visualizer.draw_dataset_dict(d)
       cv2_imshow(out.get_image()[:, :, ::-1])
+
+"""Detectron2 training & test functions:"""
 
 import logging
 import os
@@ -167,7 +198,7 @@ def get_evaluator(cfg, dataset_name, output_folder=None):
 
     """
     if output_folder is None:
-        output_folder = os.path.join(cfg.OUTPUT_DIR, "recognition")
+        output_folder = os.path.join(cfg.OUTPUT_DIR, "inference")
     evaluator_list = []
 
     evaluator_type = MetadataCatalog.get(dataset_name).evaluator_type
@@ -210,13 +241,14 @@ def do_test(cfg, model):
         evaluator = get_evaluator(
             cfg,
             dataset_name,
-            os.path.join(cfg.OUTPUT_DIR, "recognition", dataset_name)
+            os.path.join(cfg.OUTPUT_DIR, "inference", dataset_name)
         )
 
-        # Run recognition and add to results dictionary
+        # Run inference and add to results dictionary
         results_i = inference_on_dataset(model, data_loader, evaluator)
         results[dataset_name] = results_i
 
+        # Log the result set to weights and biases
         result_log = {}
         result_dict = results_i
         for iou_type in result_dict:
@@ -227,6 +259,7 @@ def do_test(cfg, model):
         logger.debug('Log the eval results on Weights & Biases')
         wandb.log(result_log)
 
+        # Print to terminal
         if comm.is_main_process():
             logger.info("Evaluation results for {} in csv format:".format(dataset_name))
             print_csv_format(results_i)
@@ -371,7 +404,7 @@ def main(args, model_name):
     # Run the training loop
     do_train(cfg, model, resume=args.resume)
 
-
+    # Save model to weights and biases
     logger.debug('Saving model to Weights & Biases')
     copyfile(ROOT_DIR + '/output/model_final.pth', wandb.run.dir + '/model_final.pth')
 
@@ -405,8 +438,3 @@ parser = default_argument_parser()
 args = parser.parse_args(arg_string)
 
 main(args, model_name)
-
-# Commented out IPython magic to ensure Python compatibility.
-if TRAINING_CURVES:
-#   %load_ext tensorboard
-#   %tensorboard --logdir output
