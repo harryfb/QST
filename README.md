@@ -1,6 +1,6 @@
 # QST: Quick Stock Take
 QST or Quick Stock Take is a, web based API for the recognising food objects and detecting their expiration
-dates. A labelled dataset was compiled for the purposes of this project and is available xxxxx.
+dates.
 
 The current version of the model has been trained on 10 classes:
 
